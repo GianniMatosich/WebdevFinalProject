@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Resume Forge placeholder icon">
+  <rect width="512" height="512" rx="96" fill="#0d6efd"/>
+  <path d="M150 100h162l50 50v262H150z" fill="white"/>
+  <path d="M312 100v50h50" fill="#cfe2ff"/>
+  <rect x="190" y="210" width="132" height="18" fill="#0d6efd"/>
+  <rect x="190" y="250" width="132" height="18" fill="#0d6efd"/>
+  <rect x="190" y="290" width="92" height="18" fill="#0d6efd"/>
+</svg>

@@ -1,0 +1,105 @@
+:root {
+  --resume-border: #e9ecef;
+}
+
+body {
+  background: #f6f8fb;
+}
+
+.editor-card,
+.preview-shell {
+  min-height: calc(100vh - 95px);
+}
+
+.resume-page {
+  background: white;
+  color: #111;
+  min-height: 900px;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.resume-name {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.resume-contact {
+  font-size: 0.82rem;
+}
+
+.resume-section-title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-bottom: 1px solid #111;
+  margin-top: 1rem;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.1rem;
+}
+
+.resume-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-weight: 700;
+}
+
+.resume-subhead {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-style: italic;
+}
+
+.resume-page ul {
+  margin-bottom: 0.4rem;
+  padding-left: 1.2rem;
+}
+
+.dynamic-card {
+  border: 1px solid var(--resume-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #fff;
+}
+
+.ai-output {
+  white-space: pre-wrap;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  .no-print,
+  nav,
+  aside,
+  .card-header {
+    display: none !important;
+  }
+
+  main,
+  .container-fluid,
+  .row,
+  section,
+  .card,
+  .card-body {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .resume-page {
+    min-height: auto;
+    padding: 0.35in !important;
+    font-size: 10.5pt;
+  }
+}
