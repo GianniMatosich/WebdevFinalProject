@@ -31,6 +31,7 @@
             <select id="resumeSelect" class="form-select mb-2"></select>
             <div class="d-grid gap-2">
               <button id="newResumeBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>New Resume</button>
+              <button id="optimizeResumeBtn" class="btn btn-warning btn-sm"><i class="bi bi-lightning-charge me-1"></i>Optimize Resume</button>
               <button id="saveResumeBtn" class="btn btn-success btn-sm"><i class="bi bi-save me-1"></i>Save Resume</button>
             </div>
           </div>
@@ -96,6 +97,7 @@
         </div>
         <div class="modal-body">
           <p>This application uses local project dependencies only, not CDN-hosted libraries.</p>
+          <p>The resume builder stores a shared item library in SQLite. Individual resumes save which items are selected for that target role.</p>
           <ul>
             <li>Bootstrap and Bootstrap Icons for UI styling</li>
             <li>Node.js, Express, and SQLite for local data storage</li>

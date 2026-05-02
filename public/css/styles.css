@@ -66,6 +66,21 @@ body {
   background: #fff;
 }
 
+.include-check {
+  background: #f8f9fa;
+  border: 1px solid var(--resume-border);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem 0.55rem 2.25rem;
+}
+
+.readonly-statement {
+  border: 1px solid var(--resume-border);
+  border-radius: 0.5rem;
+  background: #f8f9fa;
+  padding: 0.75rem;
+  min-height: 4rem;
+}
+
 .ai-output {
   white-space: pre-wrap;
 }

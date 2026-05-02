@@ -23,6 +23,12 @@ const api = {
   improve(sectionType, text) {
     return this.request('/api/ai/improve', { method: 'POST', body: JSON.stringify({ sectionType, text }) });
   },
+  generateStatement(resume) {
+    return this.request('/api/ai/statement', { method: 'POST', body: JSON.stringify({ resume }) });
+  },
+  optimizeResume(resume) {
+    return this.request('/api/ai/optimize', { method: 'POST', body: JSON.stringify({ resume }) });
+  },
   saveSettings(geminiApiKey) {
     return this.request('/api/settings', { method: 'PUT', body: JSON.stringify({ geminiApiKey }) });
   }
