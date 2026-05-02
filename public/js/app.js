@@ -4,6 +4,31 @@ let currentSection = 'basics';
 const $ = (id) => document.getElementById(id);
 const itemTypes = ['education', 'experience', 'projects', 'skills', 'certifications', 'awards'];
 
+function showMessage(message, type = 'info', timeout = 4500) {
+  const box = $('appMessage');
+
+  if (!box) {
+    console.log(message);
+    return;
+  }
+
+  box.className = `app-message alert alert-${type} shadow-sm no-print`;
+  box.textContent = message;
+  box.classList.remove('d-none');
+
+  window.clearTimeout(showMessage._timer);
+  showMessage._timer = window.setTimeout(() => {
+    box.classList.add('d-none');
+  }, timeout);
+}
+
+function focusFirstEditorInput() {
+  window.setTimeout(() => {
+    const firstInput = document.querySelector('#editorPanel .resume-input');
+    if (firstInput) firstInput.focus();
+  }, 50);
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -76,32 +101,40 @@ function ensureResumeShape(resume) {
     d.selections[type] = d.selections[type] || {};
   });
 
-  // Upgrade old saved data into the library/selection structure.
   if (Array.isArray(d.education) && d.library.education.length === 0) {
     d.library.education = d.education.map((item) => ({ id: item.id || makeId('edu'), ...item }));
     d.library.education.forEach((item) => { d.selections.education[item.id] = true; });
     delete d.education;
   }
+
   if (Array.isArray(d.experience) && d.library.experience.length === 0) {
     d.library.experience = d.experience.map((item) => ({ id: item.id || makeId('exp'), ...item }));
     d.library.experience.forEach((item) => { d.selections.experience[item.id] = true; });
     delete d.experience;
   }
+
   if (Array.isArray(d.projects) && d.library.projects.length === 0) {
     d.library.projects = d.projects.map((item) => ({ id: item.id || makeId('proj'), ...item }));
     d.library.projects.forEach((item) => { d.selections.projects[item.id] = true; });
     delete d.projects;
   }
+
   if (typeof d.skills === 'string' && d.library.skills.length === 0) {
-    d.library.skills = d.skills.split(',').map((skill) => skill.trim()).filter(Boolean).map((name) => ({ id: makeId('skill'), name, category: '' }));
+    d.library.skills = d.skills
+      .split(',')
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+      .map((name) => ({ id: makeId('skill'), name, category: '' }));
     d.library.skills.forEach((item) => { d.selections.skills[item.id] = true; });
     delete d.skills;
   }
+
   if (Array.isArray(d.certifications) && d.library.certifications.length === 0) {
     d.library.certifications = d.certifications.map((name) => ({ id: makeId('cert'), name }));
     d.library.certifications.forEach((item) => { d.selections.certifications[item.id] = true; });
     delete d.certifications;
   }
+
   if (Array.isArray(d.awards) && d.library.awards.length === 0) {
     d.library.awards = d.awards.map((name) => ({ id: makeId('award'), name }));
     d.library.awards.forEach((item) => { d.selections.awards[item.id] = true; });
@@ -150,6 +183,7 @@ function normalizeResumeData() {
       delete item.bulletsText;
     }
   });
+
   currentResume.resumeData.library.projects.forEach((item) => {
     if (item.bulletsText !== undefined) {
       item.bullets = item.bulletsText.split('\n').map((b) => b.trim()).filter(Boolean);
@@ -164,12 +198,14 @@ function bindInputs() {
   document.querySelectorAll('.resume-input').forEach((input) => {
     input.addEventListener('input', (event) => {
       const path = event.target.dataset.path;
+
       if (path === 'title' || path === 'targetRole') {
         currentResume[path] = event.target.value;
         if (path === 'targetRole') buildLocalStatement();
       } else {
         setByPath(currentResume.resumeData, path, event.target.value);
       }
+
       renderPreview();
     });
   });
@@ -186,20 +222,22 @@ function bindInputs() {
   document.querySelectorAll('.ai-btn').forEach((button) => {
     button.addEventListener('click', async () => {
       const path = button.dataset.path;
-      const original = getByPath(currentResume.resumeData, path);
+      const original = getByPath(currentResume.resumeData, path) || '';
+
       button.disabled = true;
       button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reviewing';
+
       try {
         const result = await api.improve(button.dataset.section, original);
         const reviewedText = result.improved_text || original;
-        if (confirm(`${reviewedText}\n\nApply this AI suggestion?`)) {
-          setByPath(currentResume.resumeData, path, reviewedText);
-          renderEditor();
-          renderPreview();
-        }
+
+        setByPath(currentResume.resumeData, path, reviewedText);
+        renderEditor();
+        renderPreview();
         showAiResult(result);
+        focusFirstEditorInput();
       } catch (err) {
-        alert(err.message);
+        showMessage(err.message, 'danger', 8000);
       } finally {
         button.disabled = false;
         button.innerHTML = '<i class="bi bi-stars me-1"></i>Review with AI';
@@ -210,8 +248,7 @@ function bindInputs() {
 
 function showAiResult(result) {
   const message = [
-    'AI Review Result:',
-    result.improved_text || '',
+    'AI review applied.',
     '',
     'Suggestions:',
     ...(result.suggestions || []).map((item) => `- ${item}`),
@@ -219,12 +256,14 @@ function showAiResult(result) {
     'Warnings:',
     ...((result.warnings || []).length ? result.warnings.map((item) => `- ${item}`) : ['- None'])
   ].join('\n');
-  alert(message);
+
+  showMessage(message, 'success', 8000);
 }
 
 function renderBasics() {
   ensureResumeShape(currentResume);
   const d = currentResume.resumeData;
+
   return `
     ${textInput('Resume Title', 'title', currentResume.title)}
     ${textInput('Target Role', 'targetRole', currentResume.targetRole || '')}
@@ -248,6 +287,7 @@ function renderBasics() {
 function renderEducation() {
   ensureResumeShape(currentResume);
   const items = currentResume.resumeData.library.education || [];
+
   return `${items.map((item, i) => `
     <div class="dynamic-card">
       ${checkbox('education', item.id, currentResume.resumeData.selections.education[item.id])}
@@ -263,6 +303,7 @@ function renderEducation() {
 function renderExperience() {
   ensureResumeShape(currentResume);
   const items = currentResume.resumeData.library.experience || [];
+
   return `${items.map((item, i) => `
     <div class="dynamic-card">
       ${checkbox('experience', item.id, currentResume.resumeData.selections.experience[item.id])}
@@ -278,6 +319,7 @@ function renderExperience() {
 function renderProjects() {
   ensureResumeShape(currentResume);
   const items = currentResume.resumeData.library.projects || [];
+
   return `${items.map((item, i) => `
     <div class="dynamic-card">
       ${checkbox('projects', item.id, currentResume.resumeData.selections.projects[item.id])}
@@ -291,6 +333,7 @@ function renderProjects() {
 function renderSkills() {
   ensureResumeShape(currentResume);
   const items = currentResume.resumeData.library.skills || [];
+
   return `${items.map((item, i) => `
     <div class="dynamic-card">
       ${checkbox('skills', item.id, currentResume.resumeData.selections.skills[item.id])}
@@ -304,6 +347,7 @@ function renderExtras() {
   ensureResumeShape(currentResume);
   const certs = currentResume.resumeData.library.certifications || [];
   const awards = currentResume.resumeData.library.awards || [];
+
   return `
     <h3 class="h6">Certifications</h3>
     ${certs.map((item, i) => `
@@ -314,6 +358,7 @@ function renderExtras() {
         ${textInput('Date', `library.certifications.${i}.date`, item.date || '')}
       </div>`).join('')}
     <button class="btn btn-outline-primary btn-sm mb-3" id="addCertificationBtn">Add Certification</button>
+
     <h3 class="h6">Awards</h3>
     ${awards.map((item, i) => `
       <div class="dynamic-card">
@@ -327,9 +372,26 @@ function renderExtras() {
 }
 
 function renderEditor() {
-  const titles = { basics: 'Basics', education: 'Education', experience: 'Experience', projects: 'Projects', skills: 'Skills', extras: 'Certifications & Awards' };
+  const titles = {
+    basics: 'Basics',
+    education: 'Education',
+    experience: 'Experience',
+    projects: 'Projects',
+    skills: 'Skills',
+    extras: 'Certifications & Awards'
+  };
+
   $('editorTitle').textContent = titles[currentSection];
-  const renderers = { basics: renderBasics, education: renderEducation, experience: renderExperience, projects: renderProjects, skills: renderSkills, extras: renderExtras };
+
+  const renderers = {
+    basics: renderBasics,
+    education: renderEducation,
+    experience: renderExperience,
+    projects: renderProjects,
+    skills: renderSkills,
+    extras: renderExtras
+  };
+
   $('editorPanel').innerHTML = renderers[currentSection]();
   bindInputs();
   bindAddButtons();
@@ -343,36 +405,47 @@ function bindAddButtons() {
     currentResume.resumeData.library.education.push({ id, school: '', location: '', degree: '', graduationDate: '', coursework: '' });
     currentResume.resumeData.selections.education[id] = false;
     renderEditor();
+    focusFirstEditorInput();
   });
+
   $('addExperienceBtn')?.addEventListener('click', () => {
     const id = makeId('exp');
     currentResume.resumeData.library.experience.push({ id, company: '', location: '', title: '', dates: '', bullets: [] });
     currentResume.resumeData.selections.experience[id] = false;
     renderEditor();
+    focusFirstEditorInput();
   });
+
   $('addProjectBtn')?.addEventListener('click', () => {
     const id = makeId('proj');
     currentResume.resumeData.library.projects.push({ id, name: '', role: '', bullets: [] });
     currentResume.resumeData.selections.projects[id] = false;
     renderEditor();
+    focusFirstEditorInput();
   });
+
   $('addSkillBtn')?.addEventListener('click', () => {
     const id = makeId('skill');
     currentResume.resumeData.library.skills.push({ id, name: '', category: '' });
     currentResume.resumeData.selections.skills[id] = false;
     renderEditor();
+    focusFirstEditorInput();
   });
+
   $('addCertificationBtn')?.addEventListener('click', () => {
     const id = makeId('cert');
     currentResume.resumeData.library.certifications.push({ id, name: '', issuer: '', date: '' });
     currentResume.resumeData.selections.certifications[id] = false;
     renderEditor();
+    focusFirstEditorInput();
   });
+
   $('addAwardBtn')?.addEventListener('click', () => {
     const id = makeId('award');
     currentResume.resumeData.library.awards.push({ id, name: '', issuer: '', date: '' });
     currentResume.resumeData.selections.awards[id] = false;
     renderEditor();
+    focusFirstEditorInput();
   });
 }
 
@@ -425,8 +498,13 @@ function renderPreview() {
 
 async function loadResumes(selectedId = null) {
   const resumes = await api.getResumes();
-  $('resumeSelect').innerHTML = resumes.map((resume) => `<option value="${resume.resumeID}">${escapeHtml(resume.title)}</option>`).join('');
+
+  $('resumeSelect').innerHTML = resumes
+    .map((resume) => `<option value="${resume.resumeID}">${escapeHtml(resume.title)}</option>`)
+    .join('');
+
   const id = selectedId || resumes[0]?.resumeID;
+
   if (id) {
     $('resumeSelect').value = id;
     currentResume = await api.getResume(id);
@@ -438,44 +516,71 @@ async function loadResumes(selectedId = null) {
 
 async function generateProfessionalStatement() {
   normalizeResumeData();
+
   const button = $('generateStatementBtn');
+
   if (button) {
     button.disabled = true;
     button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating';
   }
+
   try {
     const result = await api.generateStatement(currentResume);
-    currentResume.resumeData.generated.professional_statement = result.professional_statement || result.improved_text || currentResume.resumeData.generated.professional_statement;
+    currentResume.resumeData.generated.professional_statement =
+      result.professional_statement ||
+      result.improved_text ||
+      currentResume.resumeData.generated.professional_statement;
+
     renderEditor();
     renderPreview();
+    showMessage('Professional statement generated.', 'success');
+    focusFirstEditorInput();
   } catch (err) {
     buildLocalStatement();
     renderEditor();
     renderPreview();
-    alert(`AI statement generation failed, so a local draft was created.\n\n${err.message}`);
+    showMessage(`AI statement generation failed, so a local draft was created.\n\n${err.message}`, 'warning', 8000);
+    focusFirstEditorInput();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = '<i class="bi bi-magic me-1"></i>Generate Professional Statement';
+    }
   }
 }
 
 async function optimizeResume() {
   normalizeResumeData();
+
   const button = $('optimizeResumeBtn');
   button.disabled = true;
   button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Optimizing';
+
   try {
     const result = await api.optimizeResume(currentResume);
+
     if (result.selections) {
       itemTypes.forEach((type) => {
         if (result.selections[type]) currentResume.resumeData.selections[type] = result.selections[type];
       });
     }
+
     if (result.professional_statement) {
       currentResume.resumeData.generated.professional_statement = result.professional_statement;
     }
+
     renderEditor();
     renderPreview();
-    alert((result.explanation || 'Resume optimized for the target role.') + '\n\nClick Save Resume to persist these choices.');
+
+    showMessage(
+      `${result.explanation || 'Resume optimized for the target role.'}\n\nClick Save Resume to persist these choices.`,
+      'success',
+      9000
+    );
+
+    focusFirstEditorInput();
   } catch (err) {
-    alert(err.message);
+    showMessage(err.message, 'danger', 8000);
   } finally {
     button.disabled = false;
     button.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Optimize Resume';
@@ -486,8 +591,10 @@ function bindGlobalEvents() {
   $('sectionTabs').addEventListener('click', (event) => {
     const button = event.target.closest('[data-section]');
     if (!button) return;
+
     document.querySelectorAll('#sectionTabs button').forEach((btn) => btn.classList.remove('active'));
     button.classList.add('active');
+
     currentSection = button.dataset.section;
     renderEditor();
   });
@@ -500,40 +607,72 @@ function bindGlobalEvents() {
   });
 
   $('saveResumeBtn').addEventListener('click', async () => {
-    normalizeResumeData();
-    const saved = await api.updateResume(currentResume.resumeID, currentResume);
-    currentResume = saved;
-    await loadResumes(saved.resumeID);
-    alert('Resume saved. Included items and the shared item library were persisted.');
+    try {
+      normalizeResumeData();
+      const saved = await api.updateResume(currentResume.resumeID, currentResume);
+      currentResume = saved;
+      await loadResumes(saved.resumeID);
+      showMessage('Resume saved. Included items and the shared item library were persisted.', 'success');
+      focusFirstEditorInput();
+    } catch (err) {
+      showMessage(err.message, 'danger', 8000);
+    }
   });
 
   $('newResumeBtn').addEventListener('click', async () => {
-    normalizeResumeData();
-    const newData = clone(currentResume.resumeData);
-    itemTypes.forEach((type) => {
-      newData.selections[type] = {};
-      (newData.library[type] || []).forEach((item) => { newData.selections[type][item.id] = false; });
-    });
-    newData.generated.professional_statement = '';
-    const created = await api.createResume({
-      title: 'New Resume',
-      targetRole: '',
-      resumeData: newData
-    });
-    await loadResumes(created.resumeID);
+    try {
+      normalizeResumeData();
+
+      const newData = clone(currentResume.resumeData);
+
+      itemTypes.forEach((type) => {
+        newData.selections[type] = {};
+        (newData.library[type] || []).forEach((item) => {
+          newData.selections[type][item.id] = false;
+        });
+      });
+
+      newData.generated.professional_statement = '';
+
+      const created = await api.createResume({
+        title: 'New Resume',
+        targetRole: '',
+        resumeData: newData
+      });
+
+      await loadResumes(created.resumeID);
+      showMessage('New resume created. Select the items you want to include, then save.', 'success');
+      focusFirstEditorInput();
+    } catch (err) {
+      showMessage(err.message, 'danger', 8000);
+    }
   });
 
   $('optimizeResumeBtn').addEventListener('click', optimizeResume);
   $('printBtn').addEventListener('click', () => window.print());
 
   $('saveSettingsBtn').addEventListener('click', async () => {
-    await api.saveSettings($('geminiApiKey').value);
-    $('geminiApiKey').value = '';
-    alert('Settings saved.');
+    try {
+      await api.saveSettings($('geminiApiKey').value);
+      $('geminiApiKey').value = '';
+      showMessage('Settings saved.', 'success');
+
+      const modalEl = $('settingsModal');
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      if (modal) modal.hide();
+
+      focusFirstEditorInput();
+    } catch (err) {
+      showMessage(err.message, 'danger', 8000);
+    }
   });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  bindGlobalEvents();
-  await loadResumes();
+  try {
+    bindGlobalEvents();
+    await loadResumes();
+  } catch (err) {
+    showMessage(err.message, 'danger', 10000);
+  }
 });

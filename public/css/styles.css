@@ -85,6 +85,15 @@ body {
   white-space: pre-wrap;
 }
 
+.app-message {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 2000;
+  max-width: 460px;
+  white-space: pre-wrap;
+}
+
 @media print {
   body {
     background: white;
@@ -93,7 +102,8 @@ body {
   .no-print,
   nav,
   aside,
-  .card-header {
+  .card-header,
+  .app-message {
     display: none !important;
   }
 
