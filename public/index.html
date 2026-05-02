@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Resume Forge local resume builder">
   <title>Resume Forge</title>
-  <link rel="icon" href="/assets/icons/app-icon-placeholder.svg">
+  <link rel="icon" href="/assets/img/icons/appImg.jfif">
   <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
   <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.css">
   <link rel="stylesheet" href="/css/styles.css">
@@ -13,7 +13,10 @@
 <body>
   <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom sticky-top">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold" href="#"><i class="bi bi-file-earmark-person me-2"></i>Resume Forge</a>
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="#">
+        <img src="/assets/img/icons/bootstrapFile.svg" alt="" width="24" height="24">
+        <span>Resume Forge</span>
+      </a>
       <div class="d-flex gap-2">
         <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#creditsModal"><i class="bi bi-info-circle me-1"></i>Credits</button>
         <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal"><i class="bi bi-gear me-1"></i>Settings</button>
@@ -108,6 +111,7 @@
             <li>Node.js, Express, and SQLite for local data storage</li>
             <li>Electron for the desktop application wrapper</li>
             <li>Google Gemini API for optional resume suggestions</li>
+            <li>DeepAI Text to Image for the generated logo</li>
           </ul>
         </div>
       </div>

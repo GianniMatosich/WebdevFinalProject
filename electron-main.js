@@ -19,7 +19,7 @@ function createWindow() {
     height: 850,
     minWidth: 1000,
     minHeight: 700,
-    icon: path.join(__dirname, 'public', 'assets', 'icons', 'app-icon-placeholder.svg'),
+    icon: path.join(__dirname, 'public', 'assets', 'img', 'icons', 'appImg.jfif'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true
