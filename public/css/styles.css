@@ -1,9 +1,10 @@
 :root {
-  --resume-border: #e9ecef;
+  --resume-border: #d6dbe1;
 }
 
 body {
   background: #f6f8fb;
+  color: #111827;
 }
 
 .editor-card,
@@ -77,6 +78,7 @@ body {
   border: 1px solid var(--resume-border);
   border-radius: 0.5rem;
   background: #f8f9fa;
+  color: #111827;
   padding: 0.75rem;
   min-height: 4rem;
 }
@@ -92,6 +94,55 @@ body {
   z-index: 2000;
   max-width: 460px;
   white-space: pre-wrap;
+}
+
+/* Accessibility contrast improvements */
+.form-text {
+  color: #495057;
+}
+
+.badge.text-bg-light {
+  color: #212529 !important;
+  background-color: #f1f3f5 !important;
+}
+
+.btn-outline-secondary {
+  color: #343a40;
+  border-color: #6c757d;
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus {
+  color: #fff;
+  background-color: #495057;
+  border-color: #495057;
+}
+
+.btn-warning {
+  color: #111 !important;
+}
+
+.list-group-item.active {
+  color: #fff;
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+}
+
+a {
+  color: #084298;
+}
+
+a:hover,
+a:focus {
+  color: #052c65;
+}
+
+.form-control:focus,
+.form-select:focus,
+.btn:focus,
+.list-group-item:focus {
+  outline: 3px solid rgba(13, 110, 253, 0.35);
+  outline-offset: 2px;
 }
 
 @media print {

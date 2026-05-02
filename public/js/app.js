@@ -42,34 +42,46 @@ function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function safeFieldId(path) {
+  return `field-${String(path).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
 function textInput(label, path, value = '', type = 'text') {
+  const inputId = safeFieldId(path);
+
   return `
     <div class="mb-3">
-      <label class="form-label">${escapeHtml(label)}</label>
-      <input class="form-control resume-input" data-path="${escapeHtml(path)}" type="${type}" value="${escapeHtml(value)}">
+      <label class="form-label" for="${escapeHtml(inputId)}">${escapeHtml(label)}</label>
+      <input id="${escapeHtml(inputId)}" class="form-control resume-input" data-path="${escapeHtml(path)}" type="${type}" value="${escapeHtml(value)}">
     </div>`;
 }
 
 function textarea(label, path, value = '', rows = 4, aiSection = 'resume_content') {
+  const textareaId = safeFieldId(path);
+
   return `
     <div class="mb-3">
-      <label class="form-label">${escapeHtml(label)}</label>
-      <textarea class="form-control resume-input" data-path="${escapeHtml(path)}" rows="${rows}">${escapeHtml(value)}</textarea>
-      <button class="btn btn-outline-primary btn-sm mt-2 ai-btn" data-path="${escapeHtml(path)}" data-section="${escapeHtml(aiSection)}">
-        <i class="bi bi-stars me-1"></i>Review with AI
+      <label class="form-label" for="${escapeHtml(textareaId)}">${escapeHtml(label)}</label>
+      <textarea id="${escapeHtml(textareaId)}" class="form-control resume-input" data-path="${escapeHtml(path)}" rows="${rows}">${escapeHtml(value)}</textarea>
+      <button class="btn btn-outline-primary btn-sm mt-2 ai-btn" type="button" data-path="${escapeHtml(path)}" data-section="${escapeHtml(aiSection)}">
+        <i class="bi bi-stars me-1" aria-hidden="true"></i>Review with AI
       </button>
     </div>`;
 }
 
 function checkbox(type, id, checked) {
+  const safeType = escapeHtml(type);
+  const safeId = escapeHtml(id);
+  const inputId = `include-${safeType}-${safeId}`;
+
   return `
     <div class="form-check include-check mb-3">
-      <input class="form-check-input include-input" type="checkbox" id="include-${type}-${id}" data-type="${type}" data-id="${id}" ${checked ? 'checked' : ''}>
-      <label class="form-check-label" for="include-${type}-${id}">Include this item in this resume</label>
+      <input class="form-check-input include-input" type="checkbox" id="${inputId}" data-type="${safeType}" data-id="${safeId}" ${checked ? 'checked' : ''}>
+      <label class="form-check-label" for="${inputId}">Include this item in this resume</label>
     </div>`;
 }
 
@@ -80,10 +92,12 @@ function getByPath(obj, path) {
 function setByPath(obj, path, value) {
   const parts = path.split('.');
   let current = obj;
+
   parts.slice(0, -1).forEach((part) => {
     if (current[part] === undefined) current[part] = {};
     current = current[part];
   });
+
   current[parts.at(-1)] = value;
 }
 
@@ -125,6 +139,7 @@ function ensureResumeShape(resume) {
       .map((skill) => skill.trim())
       .filter(Boolean)
       .map((name) => ({ id: makeId('skill'), name, category: '' }));
+
     d.library.skills.forEach((item) => { d.selections.skills[item.id] = true; });
     delete d.skills;
   }
@@ -155,6 +170,7 @@ function selectedItems(type) {
 
 function buildLocalStatement() {
   ensureResumeShape(currentResume);
+
   const d = currentResume.resumeData;
   const targetRole = currentResume.targetRole || 'professional role';
   const degree = selectedItems('education')[0]?.degree || 'student';
@@ -174,6 +190,7 @@ function buildLocalStatement() {
 
 function normalizeResumeData() {
   ensureResumeShape(currentResume);
+
   currentResume.title = getByPath(currentResume, 'title') || currentResume.title;
   currentResume.targetRole = getByPath(currentResume, 'targetRole') || currentResume.targetRole;
 
@@ -242,7 +259,10 @@ function bindInputs() {
 
       if (path === 'title' || path === 'targetRole') {
         currentResume[path] = event.target.value;
-        if (path === 'targetRole') buildLocalStatement();
+
+        if (path === 'targetRole') {
+          buildLocalStatement();
+        }
       } else {
         setByPath(currentResume.resumeData, path, event.target.value);
       }
@@ -289,7 +309,7 @@ function bindInputs() {
         showMessage(err.message, 'danger', 8000);
       } finally {
         button.disabled = false;
-        button.innerHTML = '<i class="bi bi-stars me-1"></i>Review with AI';
+        button.innerHTML = '<i class="bi bi-stars me-1" aria-hidden="true"></i>Review with AI';
       }
     });
   });
@@ -319,17 +339,17 @@ function renderBasics() {
     <div class="alert alert-info py-2">
       Professional Statement is generated from the target role and the selected resume content. It is not manually edited.
     </div>
-    <button class="btn btn-outline-primary btn-sm mb-3" id="generateStatementBtn">
-      <i class="bi bi-magic me-1"></i>Generate Professional Statement
+    <button class="btn btn-outline-primary btn-sm mb-3" id="generateStatementBtn" type="button">
+      <i class="bi bi-magic me-1" aria-hidden="true"></i>Generate Professional Statement
     </button>
     <div class="readonly-statement mb-3">${escapeHtml(d.generated.professional_statement || '')}</div>
     <hr>
     ${textInput('Full Name', 'header.fullName', d.header.fullName || '')}
     ${textInput('Location', 'header.location', d.header.location || '')}
     ${textInput('Phone', 'header.phone', d.header.phone || '')}
-    ${textInput('Email', 'header.email', d.header.email || '')}
-    ${textInput('GitHub', 'header.github', d.header.github || '')}
-    ${textInput('LinkedIn', 'header.linkedin', d.header.linkedin || '')}
+    ${textInput('Email', 'header.email', d.header.email || '', 'email')}
+    ${textInput('GitHub', 'header.github', d.header.github || '', 'url')}
+    ${textInput('LinkedIn', 'header.linkedin', d.header.linkedin || '', 'url')}
   `;
 }
 
@@ -346,7 +366,7 @@ function renderEducation() {
       ${textInput('Graduation Date', `library.education.${i}.graduationDate`, item.graduationDate || '')}
       ${textarea('Relevant Coursework', `library.education.${i}.coursework`, item.coursework || '', 3, 'education')}
     </div>`).join('')}
-    <button class="btn btn-outline-primary btn-sm" id="addEducationBtn">Add Education</button>`;
+    <button class="btn btn-outline-primary btn-sm" id="addEducationBtn" type="button">Add Education</button>`;
 }
 
 function renderExperience() {
@@ -362,7 +382,7 @@ function renderExperience() {
       ${textInput('Dates', `library.experience.${i}.dates`, item.dates || '')}
       ${textarea('Responsibilities/details, one per line', `library.experience.${i}.bulletsText`, (item.bullets || []).join('\n'), 5, 'experience')}
     </div>`).join('')}
-    <button class="btn btn-outline-primary btn-sm" id="addExperienceBtn">Add Experience</button>`;
+    <button class="btn btn-outline-primary btn-sm" id="addExperienceBtn" type="button">Add Experience</button>`;
 }
 
 function renderProjects() {
@@ -376,7 +396,7 @@ function renderProjects() {
       ${textInput('Role', `library.projects.${i}.role`, item.role || '')}
       ${textarea('Responsibilities/details, one per line', `library.projects.${i}.bulletsText`, (item.bullets || []).join('\n'), 6, 'project')}
     </div>`).join('')}
-    <button class="btn btn-outline-primary btn-sm" id="addProjectBtn">Add Project</button>`;
+    <button class="btn btn-outline-primary btn-sm" id="addProjectBtn" type="button">Add Project</button>`;
 }
 
 function renderSkills() {
@@ -389,11 +409,12 @@ function renderSkills() {
       ${textInput('Skill', `library.skills.${i}.name`, item.name || '')}
       ${textInput('Category', `library.skills.${i}.category`, item.category || '')}
     </div>`).join('')}
-    <button class="btn btn-outline-primary btn-sm" id="addSkillBtn">Add Skill</button>`;
+    <button class="btn btn-outline-primary btn-sm" id="addSkillBtn" type="button">Add Skill</button>`;
 }
 
 function renderExtras() {
   ensureResumeShape(currentResume);
+
   const certs = currentResume.resumeData.library.certifications || [];
   const awards = currentResume.resumeData.library.awards || [];
 
@@ -406,7 +427,7 @@ function renderExtras() {
         ${textInput('Issuer', `library.certifications.${i}.issuer`, item.issuer || '')}
         ${textInput('Date', `library.certifications.${i}.date`, item.date || '')}
       </div>`).join('')}
-    <button class="btn btn-outline-primary btn-sm mb-3" id="addCertificationBtn">Add Certification</button>
+    <button class="btn btn-outline-primary btn-sm mb-3" id="addCertificationBtn" type="button">Add Certification</button>
 
     <h3 class="h6">Awards</h3>
     ${awards.map((item, i) => `
@@ -416,7 +437,7 @@ function renderExtras() {
         ${textInput('Issuer', `library.awards.${i}.issuer`, item.issuer || '')}
         ${textInput('Date', `library.awards.${i}.date`, item.date || '')}
       </div>`).join('')}
-    <button class="btn btn-outline-primary btn-sm" id="addAwardBtn">Add Award</button>
+    <button class="btn btn-outline-primary btn-sm" id="addAwardBtn" type="button">Add Award</button>
   `;
 }
 
@@ -505,8 +526,11 @@ function section(title, content) {
 
 function renderPreview() {
   normalizeResumeData();
+
   const d = currentResume.resumeData;
-  const contact = [d.header.location, d.header.phone, d.header.email, d.header.github, d.header.linkedin].filter(Boolean).join(' | ');
+  const contact = [d.header.location, d.header.phone, d.header.email, d.header.github, d.header.linkedin]
+    .filter(Boolean)
+    .join(' | ');
 
   const education = selectedItems('education').map((e) => `
     <div class="resume-item-head"><span>${escapeHtml(e.school)}</span><span>${escapeHtml(e.location)}</span></div>
@@ -527,8 +551,14 @@ function renderPreview() {
   `).join('');
 
   const skills = selectedItems('skills').map((s) => escapeHtml(s.name)).filter(Boolean).join(', ');
-  const certifications = selectedItems('certifications').map((c) => `<div>${escapeHtml([c.name, c.issuer, c.date].filter(Boolean).join(' — '))}</div>`).join('');
-  const awards = selectedItems('awards').map((a) => `<div>${escapeHtml([a.name, a.issuer, a.date].filter(Boolean).join(' — '))}</div>`).join('');
+
+  const certifications = selectedItems('certifications')
+    .map((c) => `<div>${escapeHtml([c.name, c.issuer, c.date].filter(Boolean).join(' — '))}</div>`)
+    .join('');
+
+  const awards = selectedItems('awards')
+    .map((a) => `<div>${escapeHtml([a.name, a.issuer, a.date].filter(Boolean).join(' — '))}</div>`)
+    .join('');
 
   $('resumePreview').innerHTML = `
     <div class="text-center">
@@ -585,6 +615,7 @@ async function generateProfessionalStatement() {
     }
 
     const result = await api.generateStatement(currentResume);
+
     currentResume.resumeData.generated.professional_statement =
       result.professional_statement ||
       result.improved_text ||
@@ -600,7 +631,7 @@ async function generateProfessionalStatement() {
   } finally {
     if (button) {
       button.disabled = false;
-      button.innerHTML = '<i class="bi bi-magic me-1"></i>Generate Professional Statement';
+      button.innerHTML = '<i class="bi bi-magic me-1" aria-hidden="true"></i>Generate Professional Statement';
     }
   }
 }
@@ -625,7 +656,9 @@ async function optimizeResume() {
 
     if (result.selections) {
       itemTypes.forEach((type) => {
-        if (result.selections[type]) currentResume.resumeData.selections[type] = result.selections[type];
+        if (result.selections[type]) {
+          currentResume.resumeData.selections[type] = result.selections[type];
+        }
       });
     }
 
@@ -647,7 +680,7 @@ async function optimizeResume() {
     showMessage(err.message, 'danger', 8000);
   } finally {
     button.disabled = false;
-    button.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Optimize Resume';
+    button.innerHTML = '<i class="bi bi-lightning-charge me-1" aria-hidden="true"></i>Optimize Resume';
   }
 }
 
@@ -656,8 +689,13 @@ function bindGlobalEvents() {
     const button = event.target.closest('[data-section]');
     if (!button) return;
 
-    document.querySelectorAll('#sectionTabs button').forEach((btn) => btn.classList.remove('active'));
+    document.querySelectorAll('#sectionTabs button').forEach((btn) => {
+      btn.classList.remove('active');
+      btn.removeAttribute('aria-current');
+    });
+
     button.classList.add('active');
+    button.setAttribute('aria-current', 'page');
 
     currentSection = button.dataset.section;
     renderEditor();
@@ -673,8 +711,10 @@ function bindGlobalEvents() {
   $('saveResumeBtn').addEventListener('click', async () => {
     try {
       normalizeResumeData();
+
       const saved = await api.updateResume(currentResume.resumeID, currentResume);
       currentResume = saved;
+
       await loadResumes(saved.resumeID);
       showMessage('Resume saved. Included items and the shared item library were persisted.', 'success');
       focusFirstEditorInput();
@@ -691,6 +731,7 @@ function bindGlobalEvents() {
 
       itemTypes.forEach((type) => {
         newData.selections[type] = {};
+
         (newData.library[type] || []).forEach((item) => {
           newData.selections[type][item.id] = false;
         });
@@ -742,12 +783,16 @@ function bindGlobalEvents() {
       }
 
       await api.saveSettings(key);
+
       keyInput.value = '';
       showMessage('Gemini API key saved. You can now use AI features.', 'success');
 
       const modalEl = $('settingsModal');
       const modal = bootstrap.Modal.getInstance(modalEl);
-      if (modal) modal.hide();
+
+      if (modal) {
+        modal.hide();
+      }
 
       focusFirstEditorInput();
     } catch (err) {

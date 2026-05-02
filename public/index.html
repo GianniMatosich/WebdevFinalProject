@@ -11,59 +11,81 @@
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom sticky-top">
+  <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom sticky-top" aria-label="Main navigation">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="#">
-        <img src="/assets/img/icons/bootstrapFile.svg" alt="" width="24" height="24">
+      <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/" aria-label="Resume Forge home">
+        <img src="/assets/img/icons/bootstrapFile.svg" alt="" width="24" height="24" aria-hidden="true">
         <span>Resume Forge</span>
       </a>
+
       <div class="d-flex gap-2">
-        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#creditsModal"><i class="bi bi-info-circle me-1"></i>Credits</button>
-        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal"><i class="bi bi-gear me-1"></i>Settings</button>
-        <button id="printBtn" class="btn btn-primary btn-sm"><i class="bi bi-printer me-1"></i>Print / Save PDF</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#creditsModal">
+          <i class="bi bi-info-circle me-1" aria-hidden="true"></i>Credits
+        </button>
+
+        <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#settingsModal">
+          <i class="bi bi-gear me-1" aria-hidden="true"></i>Settings
+        </button>
+
+        <button id="printBtn" class="btn btn-outline-primary btn-sm" type="button">
+          <i class="bi bi-printer me-1" aria-hidden="true"></i>Print
+        </button>
+
+        <button id="savePdfBtn" class="btn btn-primary btn-sm" type="button">
+          <i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>Save PDF
+        </button>
       </div>
     </div>
   </nav>
 
   <main class="container-fluid py-3">
     <div class="row g-3">
-      <aside class="col-lg-3 no-print">
+      <aside class="col-lg-3 no-print" aria-label="Resume controls">
         <div class="card shadow-sm mb-3">
           <div class="card-body">
             <label for="resumeSelect" class="form-label fw-semibold">Resume</label>
-            <select id="resumeSelect" class="form-select mb-2"></select>
+            <select id="resumeSelect" class="form-select mb-2" aria-label="Select saved resume"></select>
+
             <div class="d-grid gap-2">
-              <button id="newResumeBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>New Resume</button>
-              <button id="optimizeResumeBtn" class="btn btn-warning btn-sm"><i class="bi bi-lightning-charge me-1"></i>Optimize Resume</button>
-              <button id="saveResumeBtn" class="btn btn-success btn-sm"><i class="bi bi-save me-1"></i>Save Resume</button>
+              <button id="newResumeBtn" class="btn btn-outline-primary btn-sm" type="button">
+                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>New Resume
+              </button>
+
+              <button id="optimizeResumeBtn" class="btn btn-warning btn-sm" type="button">
+                <i class="bi bi-lightning-charge me-1" aria-hidden="true"></i>Optimize Resume
+              </button>
+
+              <button id="saveResumeBtn" class="btn btn-success btn-sm" type="button">
+                <i class="bi bi-save me-1" aria-hidden="true"></i>Save Resume
+              </button>
             </div>
           </div>
         </div>
 
-        <div class="list-group shadow-sm" id="sectionTabs" role="tablist">
-          <button class="list-group-item list-group-item-action active" data-section="basics">Basics</button>
-          <button class="list-group-item list-group-item-action" data-section="education">Education</button>
-          <button class="list-group-item list-group-item-action" data-section="experience">Experience</button>
-          <button class="list-group-item list-group-item-action" data-section="projects">Projects</button>
-          <button class="list-group-item list-group-item-action" data-section="skills">Skills</button>
-          <button class="list-group-item list-group-item-action" data-section="extras">Certifications & Awards</button>
-        </div>
+        <nav class="list-group shadow-sm" id="sectionTabs" aria-label="Resume editor sections">
+          <button class="list-group-item list-group-item-action active" type="button" data-section="basics" aria-current="page">Basics</button>
+          <button class="list-group-item list-group-item-action" type="button" data-section="education">Education</button>
+          <button class="list-group-item list-group-item-action" type="button" data-section="experience">Experience</button>
+          <button class="list-group-item list-group-item-action" type="button" data-section="projects">Projects</button>
+          <button class="list-group-item list-group-item-action" type="button" data-section="skills">Skills</button>
+          <button class="list-group-item list-group-item-action" type="button" data-section="extras">Certifications & Awards</button>
+        </nav>
       </aside>
 
-      <section class="col-lg-5 no-print">
+      <section class="col-lg-5 no-print" aria-labelledby="editorTitle">
         <div class="card shadow-sm editor-card">
           <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 id="editorTitle" class="h5 mb-0">Basics</h2>
+            <h1 id="editorTitle" class="h5 mb-0">Basics</h1>
             <span class="badge text-bg-light">SPA editor</span>
           </div>
           <div class="card-body" id="editorPanel"></div>
         </div>
       </section>
 
-      <section class="col-lg-4">
+      <section class="col-lg-4" aria-labelledby="previewTitle">
         <div class="card shadow-sm preview-shell">
           <div class="card-header bg-white no-print">
-            <h2 class="h5 mb-0">Live Preview</h2>
+            <h2 id="previewTitle" class="h5 mb-0">Live Preview</h2>
           </div>
           <div class="card-body resume-page" id="resumePreview" aria-label="Resume preview"></div>
         </div>
@@ -81,13 +103,15 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2 class="modal-title h5" id="settingsTitle">AI Settings</h2>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close AI settings"></button>
         </div>
+
         <div class="modal-body">
           <label for="geminiApiKey" class="form-label">Gemini API Key</label>
-          <input id="geminiApiKey" class="form-control" type="password" placeholder="Paste your key here">
+          <input id="geminiApiKey" class="form-control" type="password" autocomplete="off" placeholder="Paste your key here">
           <div class="form-text">Stored locally in SQLite for this project. Do not commit real keys to GitHub.</div>
         </div>
+
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
           <button id="saveSettingsBtn" type="button" class="btn btn-primary">Save Settings</button>
@@ -101,17 +125,24 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2 class="modal-title h5" id="creditsTitle">Credits</h2>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close credits"></button>
         </div>
+
         <div class="modal-body">
           <p>This application uses local project dependencies only, not CDN-hosted libraries.</p>
           <p>The resume builder stores a shared item library in SQLite. Individual resumes save which items are selected for that target role.</p>
+
           <ul>
             <li>Bootstrap and Bootstrap Icons for UI styling</li>
             <li>Node.js, Express, and SQLite for local data storage</li>
             <li>Electron for the desktop application wrapper</li>
             <li>Google Gemini API for optional resume suggestions</li>
-            <li>DeepAI Text to Image for the generated logo</li>
+            <li>
+              <a href="https://deepai.org/machine-learning-model/text2img" target="_blank" rel="noopener noreferrer">
+                DeepAI Text to Image
+              </a>
+              for the generated logo
+            </li>
           </ul>
         </div>
       </div>
