@@ -20,6 +20,9 @@ const api = {
   updateResume(id, payload) {
     return this.request(`/api/resumes/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   },
+  getSettings() {
+    return this.request('/api/settings');
+  },
   improve(sectionType, text) {
     return this.request('/api/ai/improve', { method: 'POST', body: JSON.stringify({ sectionType, text }) });
   },

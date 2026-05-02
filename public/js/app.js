@@ -194,6 +194,47 @@ function normalizeResumeData() {
   if (!currentResume.resumeData.generated.professional_statement) buildLocalStatement();
 }
 
+async function hasGeminiApiKey() {
+  const settings = await api.getSettings();
+  return Boolean(settings.hasGeminiKey);
+}
+
+function openGeminiSettingsPrompt() {
+  showMessage(
+    'A Gemini API key is required before using AI features. Enter your key in Settings, then try again.',
+    'warning',
+    9000
+  );
+
+  const modalEl = $('settingsModal');
+
+  if (modalEl && window.bootstrap) {
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+
+    setTimeout(() => {
+      const keyInput = $('geminiApiKey');
+      if (keyInput) keyInput.focus();
+    }, 300);
+  }
+}
+
+async function requireGeminiApiKey() {
+  try {
+    const hasKey = await hasGeminiApiKey();
+
+    if (!hasKey) {
+      openGeminiSettingsPrompt();
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    showMessage(`Could not check Gemini API key status.\n\n${err.message}`, 'danger', 8000);
+    return false;
+  }
+}
+
 function bindInputs() {
   document.querySelectorAll('.resume-input').forEach((input) => {
     input.addEventListener('input', (event) => {
@@ -225,9 +266,17 @@ function bindInputs() {
       const original = getByPath(currentResume.resumeData, path) || '';
 
       button.disabled = true;
-      button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reviewing';
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking key';
 
       try {
+        const canUseAi = await requireGeminiApiKey();
+
+        if (!canUseAi) {
+          return;
+        }
+
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reviewing';
+
         const result = await api.improve(button.dataset.section, original);
         const reviewedText = result.improved_text || original;
 
@@ -521,10 +570,20 @@ async function generateProfessionalStatement() {
 
   if (button) {
     button.disabled = true;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating';
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking key';
   }
 
   try {
+    const canUseAi = await requireGeminiApiKey();
+
+    if (!canUseAi) {
+      return;
+    }
+
+    if (button) {
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating';
+    }
+
     const result = await api.generateStatement(currentResume);
     currentResume.resumeData.generated.professional_statement =
       result.professional_statement ||
@@ -536,10 +595,7 @@ async function generateProfessionalStatement() {
     showMessage('Professional statement generated.', 'success');
     focusFirstEditorInput();
   } catch (err) {
-    buildLocalStatement();
-    renderEditor();
-    renderPreview();
-    showMessage(`AI statement generation failed, so a local draft was created.\n\n${err.message}`, 'warning', 8000);
+    showMessage(err.message, 'danger', 8000);
     focusFirstEditorInput();
   } finally {
     if (button) {
@@ -554,9 +610,17 @@ async function optimizeResume() {
 
   const button = $('optimizeResumeBtn');
   button.disabled = true;
-  button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Optimizing';
+  button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking key';
 
   try {
+    const canUseAi = await requireGeminiApiKey();
+
+    if (!canUseAi) {
+      return;
+    }
+
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Optimizing';
+
     const result = await api.optimizeResume(currentResume);
 
     if (result.selections) {
@@ -649,13 +713,37 @@ function bindGlobalEvents() {
   });
 
   $('optimizeResumeBtn').addEventListener('click', optimizeResume);
-  $('printBtn').addEventListener('click', () => window.print());
+
+  $('printBtn').addEventListener('click', () => {
+    window.print();
+  });
+
+  $('savePdfBtn')?.addEventListener('click', () => {
+    showMessage(
+      'To save as PDF, choose "Save as PDF" or "Microsoft Print to PDF" in the print dialog.',
+      'info',
+      7000
+    );
+
+    setTimeout(() => {
+      window.print();
+    }, 300);
+  });
 
   $('saveSettingsBtn').addEventListener('click', async () => {
     try {
-      await api.saveSettings($('geminiApiKey').value);
-      $('geminiApiKey').value = '';
-      showMessage('Settings saved.', 'success');
+      const keyInput = $('geminiApiKey');
+      const key = keyInput.value.trim();
+
+      if (!key) {
+        showMessage('Please enter a Gemini API key before saving settings.', 'warning', 7000);
+        keyInput.focus();
+        return;
+      }
+
+      await api.saveSettings(key);
+      keyInput.value = '';
+      showMessage('Gemini API key saved. You can now use AI features.', 'success');
 
       const modalEl = $('settingsModal');
       const modal = bootstrap.Modal.getInstance(modalEl);
