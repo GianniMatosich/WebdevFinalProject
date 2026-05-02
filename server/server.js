@@ -1,3 +1,8 @@
+// server.js
+// Backend for Resume Forge.
+// This file starts the Express server, serves the frontend files,
+// manages the SQLite database, and handles Gemini AI requests.
+
 require('dotenv').config();
 
 const express = require('express');
@@ -8,26 +13,57 @@ const { v4: uuidv4 } = require('uuid');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
+
+// The server port can be set in .env.
+// If no PORT is provided, it defaults to 3100.
 const PORT = process.env.PORT || 3100;
+
+// ROOT points to the project root folder.
+// __dirname is the server folder, so '..' moves up one level.
 const ROOT = path.join(__dirname, '..');
+
+// Default SQLite data folder.
 const DATA_DIR = path.join(__dirname, 'data');
+
+// Database path comes from .env if provided.
+// Otherwise, it uses server/data/resume_builder.sqlite.
 const DB_PATH = process.env.DATABASE_PATH
   ? path.resolve(ROOT, process.env.DATABASE_PATH)
   : path.join(DATA_DIR, 'resume_builder.sqlite');
+
+// Rules file used to guide Gemini prompts.
+// This supports the project requirement for documenting and using a rules file.
 const RULES_PATH = path.join(ROOT, 'config', 'rules.json');
+
+// Resume item sections that are stored in the shared library
+// and can be selected differently for each resume.
 const itemTypes = ['education', 'experience', 'projects', 'skills', 'certifications', 'awards'];
 
+// Make sure the database folder exists before opening SQLite.
+// This allows a fresh clone/download to create its own local database automatically.
 const RESOLVED_DATA_DIR = path.dirname(DB_PATH);
 if (!fs.existsSync(RESOLVED_DATA_DIR)) fs.mkdirSync(RESOLVED_DATA_DIR, { recursive: true });
 
+// Open the SQLite database.
 const db = new sqlite3.Database(DB_PATH);
+
+// Load AI rules from config/rules.json.
 const rules = JSON.parse(fs.readFileSync(RULES_PATH, 'utf8'));
 
+// Allow JSON request bodies.
+// The limit prevents extremely large requests.
 app.use(express.json({ limit: '2mb' }));
+
+// Serve frontend files from public/.
 app.use(express.static(path.join(ROOT, 'public')));
+
+// Serve Bootstrap and Bootstrap Icons locally from node_modules.
+// This avoids CDN usage, which is required by the assignment.
 app.use('/vendor/bootstrap', express.static(path.join(ROOT, 'node_modules', 'bootstrap', 'dist')));
 app.use('/vendor/bootstrap-icons', express.static(path.join(ROOT, 'node_modules', 'bootstrap-icons', 'font')));
 
+// Promise wrapper for db.run().
+// Used for INSERT, UPDATE, DELETE, and CREATE TABLE queries.
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
@@ -37,6 +73,8 @@ function run(sql, params = []) {
   });
 }
 
+// Promise wrapper for db.get().
+// Used when only one row is expected.
 function get(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
@@ -46,6 +84,8 @@ function get(sql, params = []) {
   });
 }
 
+// Promise wrapper for db.all().
+// Used when multiple rows may be returned.
 function all(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
@@ -55,10 +95,14 @@ function all(sql, params = []) {
   });
 }
 
+// Creates an ID with a readable prefix.
+// Example: edu-uuid, exp-uuid, proj-uuid.
 function makeId(prefix) {
   return `${prefix}-${uuidv4()}`;
 }
 
+// Seed data for the first resume.
+// This gives the app initial content when the database is created for the first time.
 const seedResumeData = {
   header: {
     fullName: 'Gianni Matosich',
@@ -122,9 +166,12 @@ const seedResumeData = {
         ]
       }
     ],
+
+    // Convert a comma-separated skill string into individual skill objects.
     skills: 'C++, C#, Python, JavaScript, CSS, Assembly, HTML, Lua, Node.js, PM2, React, SQL, GitHub, Google Cloud Platform (GCP), Linux, MS Office'
       .split(',')
       .map((skill) => ({ id: makeId('skill'), name: skill.trim(), category: '' })),
+
     certifications: [],
     awards: []
   },
@@ -137,61 +184,86 @@ const seedResumeData = {
     awards: {}
   }
 };
+
+// By default, include all seed items in the first resume.
 itemTypes.forEach((type) => {
   seedResumeData.selections[type] = {};
   seedResumeData.library[type].forEach((item) => { seedResumeData.selections[type][item.id] = true; });
 });
 
+// Ensures resume data has the expected structure.
+// This also upgrades older formats into the newer shared-library format.
 function normalizeResumeData(data) {
   const d = data || {};
+
   d.header = d.header || {};
   d.generated = d.generated || {};
   d.library = d.library || {};
   d.selections = d.selections || {};
 
+  // Ensure every item type has both a library array and a selection object.
   itemTypes.forEach((type) => {
     d.library[type] = d.library[type] || [];
     d.selections[type] = d.selections[type] || {};
   });
 
+  // Move old professional_statement field into generated.professional_statement.
   if (d.professional_statement && !d.generated.professional_statement) {
     d.generated.professional_statement = d.professional_statement;
     delete d.professional_statement;
   }
 
+  // Upgrade older education array into library.education.
   if (Array.isArray(d.education) && d.library.education.length === 0) {
     d.library.education = d.education.map((item) => ({ id: item.id || makeId('edu'), ...item }));
     d.library.education.forEach((item) => { d.selections.education[item.id] = true; });
     delete d.education;
   }
+
+  // Upgrade older experience array into library.experience.
   if (Array.isArray(d.experience) && d.library.experience.length === 0) {
     d.library.experience = d.experience.map((item) => ({ id: item.id || makeId('exp'), ...item }));
     d.library.experience.forEach((item) => { d.selections.experience[item.id] = true; });
     delete d.experience;
   }
+
+  // Upgrade older projects array into library.projects.
   if (Array.isArray(d.projects) && d.library.projects.length === 0) {
     d.library.projects = d.projects.map((item) => ({ id: item.id || makeId('proj'), ...item }));
     d.library.projects.forEach((item) => { d.selections.projects[item.id] = true; });
     delete d.projects;
   }
+
+  // Upgrade older comma-separated skills into individual skill objects.
   if (typeof d.skills === 'string' && d.library.skills.length === 0) {
-    d.library.skills = d.skills.split(',').map((skill) => skill.trim()).filter(Boolean).map((name) => ({ id: makeId('skill'), name, category: '' }));
+    d.library.skills = d.skills
+      .split(',')
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+      .map((name) => ({ id: makeId('skill'), name, category: '' }));
+
     d.library.skills.forEach((item) => { d.selections.skills[item.id] = true; });
     delete d.skills;
   }
+
+  // Upgrade older certifications array into library.certifications.
   if (Array.isArray(d.certifications) && d.library.certifications.length === 0) {
     d.library.certifications = d.certifications.map((name) => ({ id: makeId('cert'), name }));
     d.library.certifications.forEach((item) => { d.selections.certifications[item.id] = true; });
     delete d.certifications;
   }
+
+  // Upgrade older awards array into library.awards.
   if (Array.isArray(d.awards) && d.library.awards.length === 0) {
     d.library.awards = d.awards.map((name) => ({ id: makeId('award'), name }));
     d.library.awards.forEach((item) => { d.selections.awards[item.id] = true; });
     delete d.awards;
   }
 
+  // Ensure every library item has an ID and every item has a selection value.
   itemTypes.forEach((type) => {
     d.library[type] = d.library[type].map((item) => ({ id: item.id || makeId(type), ...item }));
+
     d.library[type].forEach((item) => {
       if (d.selections[type][item.id] === undefined) d.selections[type][item.id] = false;
     });
@@ -200,66 +272,97 @@ function normalizeResumeData(data) {
   return d;
 }
 
+// Converts a database row into a usable resume object.
+// resumeData is stored as JSON text in SQLite, so it must be parsed.
 function parseResume(row) {
   return { ...row, resumeData: normalizeResumeData(JSON.parse(row.resumeData)) };
 }
 
+// Combines two resume libraries by item ID.
+// If two items have the same ID, the incoming item replaces the old one.
 function mergeLibraries(base, incoming) {
   const merged = JSON.parse(JSON.stringify(base));
+
   itemTypes.forEach((type) => {
     const byId = new Map((merged.library[type] || []).map((item) => [item.id, item]));
+
     (incoming.library[type] || []).forEach((item) => {
       if (!item.id) item.id = makeId(type);
       byId.set(item.id, item);
     });
+
     merged.library[type] = Array.from(byId.values());
   });
+
   return merged;
 }
 
+// Builds one global library by reading all resumes for the local user.
+// This supports the assignment requirement that jobs/skills/etc. can be reused.
 async function getGlobalLibrary() {
   const rows = await all('SELECT resumeData FROM resumes WHERE userID = ?', ['local-user']);
+
   let global = normalizeResumeData({ library: {}, selections: {}, generated: {}, header: {} });
+
   rows.forEach((row) => {
     const data = normalizeResumeData(JSON.parse(row.resumeData));
     global = mergeLibraries(global, data);
   });
+
   return global.library;
 }
 
+// Applies the shared global library to one resume,
+// while preserving that resume's current checked/unchecked selections.
 async function applyGlobalLibraryToResume(resume) {
   const globalLibrary = await getGlobalLibrary();
+
   itemTypes.forEach((type) => {
     const existingSelections = resume.resumeData.selections[type] || {};
+
     resume.resumeData.library[type] = globalLibrary[type] || [];
     resume.resumeData.selections[type] = {};
+
     resume.resumeData.library[type].forEach((item) => {
       resume.resumeData.selections[type][item.id] = Boolean(existingSelections[item.id]);
     });
   });
+
   return resume;
 }
 
+// When one resume adds/edits library items, update every resume's library.
+// Each resume keeps its own checked/unchecked choices.
 async function updateAllResumeLibrariesFrom(sourceData) {
   const rows = await all('SELECT resumeID, resumeData FROM resumes WHERE userID = ?', ['local-user']);
-  const globalLibrary = (await getGlobalLibrary());
+  const globalLibrary = await getGlobalLibrary();
+
   let merged = normalizeResumeData({ library: globalLibrary, selections: {}, generated: {}, header: {} });
   merged = mergeLibraries(merged, sourceData);
 
   for (const row of rows) {
     const data = normalizeResumeData(JSON.parse(row.resumeData));
+
     itemTypes.forEach((type) => {
       const currentSelections = data.selections[type] || {};
+
       data.library[type] = merged.library[type];
       data.selections[type] = {};
+
       data.library[type].forEach((item) => {
         data.selections[type][item.id] = Boolean(currentSelections[item.id]);
       });
     });
-    await run('UPDATE resumes SET resumeData = ?, updatedAt = updatedAt WHERE resumeID = ?', [JSON.stringify(data), row.resumeID]);
+
+    await run(
+      'UPDATE resumes SET resumeData = ?, updatedAt = updatedAt WHERE resumeID = ?',
+      [JSON.stringify(data), row.resumeID]
+    );
   }
 }
 
+// Creates database tables if they do not exist.
+// Also seeds the first local user and first sample resume.
 async function initDb() {
   await run(`CREATE TABLE IF NOT EXISTS users (
     userID TEXT PRIMARY KEY,
@@ -287,9 +390,11 @@ async function initDb() {
   )`);
 
   const user = await get('SELECT userID FROM users WHERE userID = ?', ['local-user']);
+
   if (!user) {
     await run('INSERT INTO users (userID, displayName) VALUES (?, ?)', ['local-user', 'Local Student']);
     await run('INSERT INTO ai_settings (userID, geminiApiKey) VALUES (?, ?)', ['local-user', '']);
+
     await run(
       'INSERT INTO resumes (resumeID, userID, title, targetRole, resumeData) VALUES (?, ?, ?, ?, ?)',
       [uuidv4(), 'local-user', 'Software / DevOps Resume', 'Software Engineering Internship', JSON.stringify(seedResumeData)]
@@ -297,17 +402,25 @@ async function initDb() {
   }
 }
 
+// Gets the Gemini API key.
+// Priority:
+// 1. Key saved through the app in SQLite
+// 2. GEMINI_API_KEY from .env
 async function getGeminiKey() {
   const settings = await get('SELECT geminiApiKey FROM ai_settings WHERE userID = ?', ['local-user']);
   return (settings && settings.geminiApiKey) || process.env.GEMINI_API_KEY;
 }
 
+// Returns selected items from a normalized resume data object.
 function selectedItems(data, type) {
   return (data.library[type] || []).filter((item) => Boolean(data.selections[type]?.[item.id]));
 }
 
+// Creates a compact resume context containing only selected resume facts.
+// This is sent to Gemini so the model does not need the full database.
 function resumeContext(resume) {
   const d = normalizeResumeData(resume.resumeData || {});
+
   return {
     targetRole: resume.targetRole || '',
     header: d.header,
@@ -320,38 +433,68 @@ function resumeContext(resume) {
   };
 }
 
+// Local fallback professional statement generator.
+// Used if no Gemini key is configured.
 function localStatement(resume) {
   const context = resumeContext(resume);
   const targetRole = context.targetRole || 'professional role';
   const degree = context.education[0]?.degree || 'student';
   const projects = context.projects.map((p) => p.name).filter(Boolean).slice(0, 2).join(' and ');
   const skills = context.skills.map((s) => s.name).filter(Boolean).slice(0, 8).join(', ');
+
   return `${degree} seeking a ${targetRole} position${skills ? ` with experience using ${skills}` : ''}${projects ? ` and project work including ${projects}` : ''}.`;
 }
 
+// Scores an item by checking whether it contains words related to the target role.
+// Used by the local optimizer fallback.
 function scoreItemForTarget(item, targetRole) {
   const haystack = JSON.stringify(item).toLowerCase();
-  const terms = String(targetRole || '').toLowerCase().split(/\W+/).filter((term) => term.length > 2);
+  const terms = String(targetRole || '')
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((term) => term.length > 2);
+
   const resumeTerms = ['software', 'developer', 'devops', 'cloud', 'node', 'express', 'database', 'sql', 'javascript', 'linux', 'security', 'api'];
   const allTerms = [...new Set([...terms, ...resumeTerms])];
+
   return allTerms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0);
 }
 
+// Local fallback optimizer.
+// This is used when Gemini is unavailable and selects items based on keyword matching.
 function localOptimize(resume) {
   const d = normalizeResumeData(resume.resumeData || {});
   const selections = {};
+
   itemTypes.forEach((type) => {
     selections[type] = {};
+
     const items = d.library[type] || [];
     const scored = items.map((item) => ({ item, score: scoreItemForTarget(item, resume.targetRole) }));
-    const limits = { education: 2, experience: 3, projects: 3, skills: 12, certifications: 5, awards: 5 };
+
+    const limits = {
+      education: 2,
+      experience: 3,
+      projects: 3,
+      skills: 12,
+      certifications: 5,
+      awards: 5
+    };
+
     scored
       .sort((a, b) => b.score - a.score)
       .slice(0, limits[type])
-      .forEach(({ item, score }) => { selections[type][item.id] = score > 0 || type === 'education'; });
-    items.forEach((item) => { if (selections[type][item.id] === undefined) selections[type][item.id] = false; });
+      .forEach(({ item, score }) => {
+        selections[type][item.id] = score > 0 || type === 'education';
+      });
+
+    items.forEach((item) => {
+      if (selections[type][item.id] === undefined) selections[type][item.id] = false;
+    });
   });
+
   const draftResume = { ...resume, resumeData: { ...d, selections } };
+
   return {
     selections,
     professional_statement: localStatement(draftResume),
@@ -359,36 +502,60 @@ function localOptimize(resume) {
   };
 }
 
+// Sends a prompt to Gemini and expects JSON back.
+// If there is no Gemini key, the fallback function is used instead.
+// If Gemini returns non-JSON text, the app returns that text safely with a warning.
 async function generateJsonWithGemini(prompt, fallback) {
   const key = await getGeminiKey();
+
   if (!key) return fallback();
 
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
+
   const result = await model.generateContent(prompt);
+
   const raw = result.response.text().replace(/```json|```/g, '').trim();
+
   try {
     return JSON.parse(raw);
   } catch {
-    return { improved_text: raw, suggestions: ['AI returned text that was not valid JSON.'], warnings: [] };
+    return {
+      improved_text: raw,
+      suggestions: ['AI returned text that was not valid JSON.'],
+      warnings: []
+    };
   }
 }
 
+// Returns the loaded rules file.
+// Useful for documentation/testing.
 app.get('/api/rules', (req, res) => res.json(rules));
 
+// Returns a list of saved resumes for the local user.
 app.get('/api/resumes', async (req, res) => {
   try {
-    const rows = await all('SELECT resumeID, title, targetRole, createdAt, updatedAt FROM resumes WHERE userID = ? ORDER BY updatedAt DESC', ['local-user']);
+    const rows = await all(
+      'SELECT resumeID, title, targetRole, createdAt, updatedAt FROM resumes WHERE userID = ? ORDER BY updatedAt DESC',
+      ['local-user']
+    );
+
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// Returns one full resume by ID.
 app.get('/api/resumes/:resumeID', async (req, res) => {
   try {
-    const row = await get('SELECT * FROM resumes WHERE resumeID = ? AND userID = ?', [req.params.resumeID, 'local-user']);
+    const row = await get(
+      'SELECT * FROM resumes WHERE resumeID = ? AND userID = ?',
+      [req.params.resumeID, 'local-user']
+    );
+
     if (!row) return res.status(404).json({ message: 'Resume not found' });
+
     const resume = parseResume(row);
     res.json(await applyGlobalLibraryToResume(resume));
   } catch (err) {
@@ -396,27 +563,41 @@ app.get('/api/resumes/:resumeID', async (req, res) => {
   }
 });
 
+// Creates a new resume.
 app.post('/api/resumes', async (req, res) => {
   try {
     const resumeID = uuidv4();
     const title = req.body.title || 'Untitled Resume';
     const targetRole = req.body.targetRole || '';
     const resumeData = normalizeResumeData(req.body.resumeData || seedResumeData);
-    await run('INSERT INTO resumes (resumeID, userID, title, targetRole, resumeData) VALUES (?, ?, ?, ?, ?)', [resumeID, 'local-user', title, targetRole, JSON.stringify(resumeData)]);
+
+    await run(
+      'INSERT INTO resumes (resumeID, userID, title, targetRole, resumeData) VALUES (?, ?, ?, ?, ?)',
+      [resumeID, 'local-user', title, targetRole, JSON.stringify(resumeData)]
+    );
+
     await updateAllResumeLibrariesFrom(resumeData);
+
     const row = await get('SELECT * FROM resumes WHERE resumeID = ?', [resumeID]);
+
     res.status(201).json(await applyGlobalLibraryToResume(parseResume(row)));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// Updates an existing resume.
 app.put('/api/resumes/:resumeID', async (req, res) => {
   try {
-    const existing = await get('SELECT * FROM resumes WHERE resumeID = ? AND userID = ?', [req.params.resumeID, 'local-user']);
+    const existing = await get(
+      'SELECT * FROM resumes WHERE resumeID = ? AND userID = ?',
+      [req.params.resumeID, 'local-user']
+    );
+
     if (!existing) return res.status(404).json({ message: 'Resume not found' });
 
     const incomingData = normalizeResumeData(req.body.resumeData || JSON.parse(existing.resumeData));
+
     await updateAllResumeLibrariesFrom(incomingData);
 
     await run(
@@ -425,85 +606,156 @@ app.put('/api/resumes/:resumeID', async (req, res) => {
     );
 
     const row = await get('SELECT * FROM resumes WHERE resumeID = ?', [req.params.resumeID]);
+
     res.json(await applyGlobalLibraryToResume(parseResume(row)));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// Deletes a resume by ID.
+// This route exists even if the current UI does not expose a delete button.
 app.delete('/api/resumes/:resumeID', async (req, res) => {
   try {
-    await run('DELETE FROM resumes WHERE resumeID = ? AND userID = ?', [req.params.resumeID, 'local-user']);
+    await run(
+      'DELETE FROM resumes WHERE resumeID = ? AND userID = ?',
+      [req.params.resumeID, 'local-user']
+    );
+
     res.json({ message: 'Resume deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// Checks if a Gemini key exists.
+// The frontend uses this before allowing AI buttons to run.
 app.get('/api/settings', async (req, res) => {
   const key = await getGeminiKey();
   res.json({ hasGeminiKey: Boolean(key) });
 });
 
+// Saves the user's Gemini API key in local SQLite settings.
 app.put('/api/settings', async (req, res) => {
   try {
-    await run('UPDATE ai_settings SET geminiApiKey = ?, updatedAt = CURRENT_TIMESTAMP WHERE userID = ?', [req.body.geminiApiKey || '', 'local-user']);
-    res.json({ message: 'Settings saved', hasGeminiKey: Boolean(req.body.geminiApiKey) });
+    await run(
+      'UPDATE ai_settings SET geminiApiKey = ?, updatedAt = CURRENT_TIMESTAMP WHERE userID = ?',
+      [req.body.geminiApiKey || '', 'local-user']
+    );
+
+    res.json({
+      message: 'Settings saved',
+      hasGeminiKey: Boolean(req.body.geminiApiKey)
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// AI route: review/improve a specific resume text field.
+// This is where user-entered details are reviewed by Gemini.
 app.post('/api/ai/improve', async (req, res) => {
   try {
     const { sectionType, text } = req.body;
-    if (!text || !sectionType) return res.status(400).json({ message: 'sectionType and text are required' });
 
-    const prompt = `${rules.prompt_template.system_instruction}\n\nRules file:\n${JSON.stringify(rules, null, 2)}\n\nSection type: ${sectionType}\nUser text:\n${text}\n\nReview this content and return only valid JSON with original_text, improved_text, suggestions, and warnings. Do not invent facts.`;
+    if (!text || !sectionType) {
+      return res.status(400).json({ message: 'sectionType and text are required' });
+    }
+
+    // Prompt includes the rules file so Gemini follows the documented project rules.
+    const prompt = `${rules.prompt_template.system_instruction}
+
+Rules file:
+${JSON.stringify(rules, null, 2)}
+
+Section type: ${sectionType}
+User text:
+${text}
+
+Review this content and return only valid JSON with original_text, improved_text, suggestions, and warnings. Do not invent facts.`;
+
     const response = await generateJsonWithGemini(prompt, () => ({
       original_text: text,
       improved_text: text,
       suggestions: ['No Gemini API key is configured yet. Add one in Settings to enable AI suggestions.'],
       warnings: ['AI was not called because no API key was available.']
     }));
+
     res.json(response);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// AI route: generate a professional statement from selected resume facts.
 app.post('/api/ai/statement', async (req, res) => {
   try {
     const { resume } = req.body;
+
     if (!resume) return res.status(400).json({ message: 'resume is required' });
+
     const context = resumeContext(resume);
-    const prompt = `${rules.prompt_template.system_instruction}\n\nRules file:\n${JSON.stringify(rules, null, 2)}\n\nCreate a professional resume statement for the target role using only the selected resume facts below. Do not invent facts. Keep it 2 sentences or fewer. Return only valid JSON in this shape: {"professional_statement":"...","suggestions":[],"warnings":[]}\n\nResume facts:\n${JSON.stringify(context, null, 2)}`;
+
+    // Gemini receives only selected resume facts, not the entire database.
+    const prompt = `${rules.prompt_template.system_instruction}
+
+Rules file:
+${JSON.stringify(rules, null, 2)}
+
+Create a professional resume statement for the target role using only the selected resume facts below. Do not invent facts. Keep it 2 sentences or fewer. Return only valid JSON in this shape: {"professional_statement":"...","suggestions":[],"warnings":[]}
+
+Resume facts:
+${JSON.stringify(context, null, 2)}`;
+
     const response = await generateJsonWithGemini(prompt, () => ({
       professional_statement: localStatement(resume),
       suggestions: ['No Gemini API key was configured, so a local statement draft was generated.'],
       warnings: []
     }));
+
     res.json(response);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// AI route: optimize a resume for a target role.
+// Gemini selects which library items should be included.
 app.post('/api/ai/optimize', async (req, res) => {
   try {
     const { resume } = req.body;
+
     if (!resume) return res.status(400).json({ message: 'resume is required' });
+
     const d = normalizeResumeData(resume.resumeData || {});
-    const prompt = `${rules.prompt_template.system_instruction}\n\nRules file:\n${JSON.stringify(rules, null, 2)}\n\nA user is tailoring a resume to a target role. Select the best education, experience, project, skill, certification, and award items. Return only valid JSON in this exact shape:\n{"selections":{"education":{},"experience":{},"projects":{},"skills":{},"certifications":{},"awards":{}},"professional_statement":"...","explanation":"..."}\nEach selections object must use item IDs as keys and true/false as values. Use only provided facts. Do not invent facts.\n\nTarget role: ${resume.targetRole || ''}\n\nAvailable resume library:\n${JSON.stringify(d.library, null, 2)}`;
+
+    const prompt = `${rules.prompt_template.system_instruction}
+
+Rules file:
+${JSON.stringify(rules, null, 2)}
+
+A user is tailoring a resume to a target role. Select the best education, experience, project, skill, certification, and award items. Return only valid JSON in this exact shape:
+{"selections":{"education":{},"experience":{},"projects":{},"skills":{},"certifications":{},"awards":{}},"professional_statement":"...","explanation":"..."}
+Each selections object must use item IDs as keys and true/false as values. Use only provided facts. Do not invent facts.
+
+Target role: ${resume.targetRole || ''}
+
+Available resume library:
+${JSON.stringify(d.library, null, 2)}`;
+
     const response = await generateJsonWithGemini(prompt, () => localOptimize({ ...resume, resumeData: d }));
+
     res.json(response);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// SPA fallback route.
+// If the browser requests an unknown path, send index.html so the frontend still loads.
 app.get('*', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')));
 
+// Initialize SQLite first, then start the Express server.
 initDb().then(() => {
   app.listen(PORT, () => console.log(`Resume Forge running at http://localhost:${PORT}`));
 });

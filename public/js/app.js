@@ -1,9 +1,19 @@
+// app.js
+// This file controls the single-page resume editor.
+// It loads resumes from the backend, renders the editor UI, updates the live preview,
+// handles AI buttons, and saves resume data to SQLite through the API.
+
 let currentResume = null;
 let currentSection = 'basics';
 
+// Small shortcut so $('someId') is the same as document.getElementById('someId').
 const $ = (id) => document.getElementById(id);
+
+// These are the reusable resume library sections that can be selected per resume.
 const itemTypes = ['education', 'experience', 'projects', 'skills', 'certifications', 'awards'];
 
+// Shows a Bootstrap-style message on the page.
+// This replaces alert() so Electron does not lose input focus after popups.
 function showMessage(message, type = 'info', timeout = 4500) {
   const box = $('appMessage');
 
@@ -22,6 +32,7 @@ function showMessage(message, type = 'info', timeout = 4500) {
   }, timeout);
 }
 
+// After re-rendering the editor, focus the first input so the app still feels responsive.
 function focusFirstEditorInput() {
   window.setTimeout(() => {
     const firstInput = document.querySelector('#editorPanel .resume-input');
@@ -29,6 +40,8 @@ function focusFirstEditorInput() {
   }, 50);
 }
 
+// Escapes text before putting it into HTML.
+// This prevents user-entered resume text from being interpreted as HTML.
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -38,18 +51,25 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+// Creates a unique ID for newly added resume items.
 function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+// Converts a data path such as library.education.0.school into a safe HTML id.
+// This is used so every input can have a real label connected with for="...".
 function safeFieldId(path) {
   return `field-${String(path).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 }
 
+// Makes a deep copy of a JavaScript object.
+// Used when creating a new resume from the current shared library.
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+// Builds a labeled text input for the editor.
+// The data-path attribute tells app.js where to save this value inside currentResume.
 function textInput(label, path, value = '', type = 'text') {
   const inputId = safeFieldId(path);
 
@@ -60,6 +80,8 @@ function textInput(label, path, value = '', type = 'text') {
     </div>`;
 }
 
+// Builds a labeled textarea plus a Review with AI button.
+// aiSection tells the backend what type of resume content Gemini is reviewing.
 function textarea(label, path, value = '', rows = 4, aiSection = 'resume_content') {
   const textareaId = safeFieldId(path);
 
@@ -73,6 +95,8 @@ function textarea(label, path, value = '', rows = 4, aiSection = 'resume_content
     </div>`;
 }
 
+// Builds the "Include this item" checkbox shown on reusable resume items.
+// The item exists in the shared library, but each resume can choose whether it includes it.
 function checkbox(type, id, checked) {
   const safeType = escapeHtml(type);
   const safeId = escapeHtml(id);
@@ -85,10 +109,14 @@ function checkbox(type, id, checked) {
     </div>`;
 }
 
+// Reads a nested value from an object using a dotted path.
+// Example: getByPath(resumeData, 'header.fullName')
 function getByPath(obj, path) {
   return path.split('.').reduce((acc, key) => acc?.[key], obj);
 }
 
+// Writes a nested value into an object using a dotted path.
+// Example: setByPath(resumeData, 'header.fullName', 'Student Name')
 function setByPath(obj, path, value) {
   const parts = path.split('.');
   let current = obj;
@@ -101,6 +129,8 @@ function setByPath(obj, path, value) {
   current[parts.at(-1)] = value;
 }
 
+// Ensures every resume uses the current data shape.
+// This also upgrades older saved resume data into the newer library/selection structure.
 function ensureResumeShape(resume) {
   if (!resume.resumeData) resume.resumeData = {};
   const d = resume.resumeData;
@@ -115,24 +145,28 @@ function ensureResumeShape(resume) {
     d.selections[type] = d.selections[type] || {};
   });
 
+  // Upgrade old education array into shared library format.
   if (Array.isArray(d.education) && d.library.education.length === 0) {
     d.library.education = d.education.map((item) => ({ id: item.id || makeId('edu'), ...item }));
     d.library.education.forEach((item) => { d.selections.education[item.id] = true; });
     delete d.education;
   }
 
+  // Upgrade old experience array into shared library format.
   if (Array.isArray(d.experience) && d.library.experience.length === 0) {
     d.library.experience = d.experience.map((item) => ({ id: item.id || makeId('exp'), ...item }));
     d.library.experience.forEach((item) => { d.selections.experience[item.id] = true; });
     delete d.experience;
   }
 
+  // Upgrade old projects array into shared library format.
   if (Array.isArray(d.projects) && d.library.projects.length === 0) {
     d.library.projects = d.projects.map((item) => ({ id: item.id || makeId('proj'), ...item }));
     d.library.projects.forEach((item) => { d.selections.projects[item.id] = true; });
     delete d.projects;
   }
 
+  // Upgrade old comma-separated skills string into individual skill objects.
   if (typeof d.skills === 'string' && d.library.skills.length === 0) {
     d.library.skills = d.skills
       .split(',')
@@ -144,30 +178,36 @@ function ensureResumeShape(resume) {
     delete d.skills;
   }
 
+  // Upgrade old certifications array into shared library format.
   if (Array.isArray(d.certifications) && d.library.certifications.length === 0) {
     d.library.certifications = d.certifications.map((name) => ({ id: makeId('cert'), name }));
     d.library.certifications.forEach((item) => { d.selections.certifications[item.id] = true; });
     delete d.certifications;
   }
 
+  // Upgrade old awards array into shared library format.
   if (Array.isArray(d.awards) && d.library.awards.length === 0) {
     d.library.awards = d.awards.map((name) => ({ id: makeId('award'), name }));
     d.library.awards.forEach((item) => { d.selections.awards[item.id] = true; });
     delete d.awards;
   }
 
+  // Move an old manually typed professional statement into the generated section.
   if (!d.generated.professional_statement && d.professional_statement) {
     d.generated.professional_statement = d.professional_statement;
     delete d.professional_statement;
   }
 }
 
+// Returns only the checked/included items for one section.
 function selectedItems(type) {
   ensureResumeShape(currentResume);
   const d = currentResume.resumeData;
   return (d.library[type] || []).filter((item) => Boolean(d.selections[type]?.[item.id]));
 }
 
+// Creates a simple professional statement locally without calling Gemini.
+// This is used as a fallback and for immediate preview when the target role changes.
 function buildLocalStatement() {
   ensureResumeShape(currentResume);
 
@@ -188,6 +228,8 @@ function buildLocalStatement() {
   d.generated.professional_statement = `${parts.join(' ')}.`;
 }
 
+// Cleans up resume data before saving or previewing.
+// It converts textarea bullet text into arrays and ensures a statement exists.
 function normalizeResumeData() {
   ensureResumeShape(currentResume);
 
@@ -211,11 +253,13 @@ function normalizeResumeData() {
   if (!currentResume.resumeData.generated.professional_statement) buildLocalStatement();
 }
 
+// Asks the backend whether a Gemini API key is available.
 async function hasGeminiApiKey() {
   const settings = await api.getSettings();
   return Boolean(settings.hasGeminiKey);
 }
 
+// Opens the Settings modal when the user tries to use AI without a Gemini key.
 function openGeminiSettingsPrompt() {
   showMessage(
     'A Gemini API key is required before using AI features. Enter your key in Settings, then try again.',
@@ -236,6 +280,8 @@ function openGeminiSettingsPrompt() {
   }
 }
 
+// Returns true only if AI features can run.
+// This prevents unnecessary calls to Gemini if no key is configured.
 async function requireGeminiApiKey() {
   try {
     const hasKey = await hasGeminiApiKey();
@@ -252,7 +298,9 @@ async function requireGeminiApiKey() {
   }
 }
 
+// Connects dynamically generated input fields, checkboxes, and AI buttons to event handlers.
 function bindInputs() {
+  // Save regular input changes into currentResume immediately and update the preview.
   document.querySelectorAll('.resume-input').forEach((input) => {
     input.addEventListener('input', (event) => {
       const path = event.target.dataset.path;
@@ -271,6 +319,7 @@ function bindInputs() {
     });
   });
 
+  // Save include/exclude checkbox changes for the current resume.
   document.querySelectorAll('.include-input').forEach((input) => {
     input.addEventListener('change', (event) => {
       const { type, id } = event.target.dataset;
@@ -280,6 +329,8 @@ function bindInputs() {
     });
   });
 
+  // AI review buttons call Gemini through the backend.
+  // The backend uses the rules file to guide the AI output.
   document.querySelectorAll('.ai-btn').forEach((button) => {
     button.addEventListener('click', async () => {
       const path = button.dataset.path;
@@ -315,6 +366,7 @@ function bindInputs() {
   });
 }
 
+// Displays Gemini review results in an in-page message.
 function showAiResult(result) {
   const message = [
     'AI review applied.',
@@ -329,6 +381,8 @@ function showAiResult(result) {
   showMessage(message, 'success', 8000);
 }
 
+// Renders the Basics section.
+// The professional statement is displayed as generated text, not a manual textarea.
 function renderBasics() {
   ensureResumeShape(currentResume);
   const d = currentResume.resumeData;
@@ -353,6 +407,7 @@ function renderBasics() {
   `;
 }
 
+// Renders education items from the shared library.
 function renderEducation() {
   ensureResumeShape(currentResume);
   const items = currentResume.resumeData.library.education || [];
@@ -369,6 +424,7 @@ function renderEducation() {
     <button class="btn btn-outline-primary btn-sm" id="addEducationBtn" type="button">Add Education</button>`;
 }
 
+// Renders experience/job items from the shared library.
 function renderExperience() {
   ensureResumeShape(currentResume);
   const items = currentResume.resumeData.library.experience || [];
@@ -385,6 +441,7 @@ function renderExperience() {
     <button class="btn btn-outline-primary btn-sm" id="addExperienceBtn" type="button">Add Experience</button>`;
 }
 
+// Renders project items from the shared library.
 function renderProjects() {
   ensureResumeShape(currentResume);
   const items = currentResume.resumeData.library.projects || [];
@@ -399,6 +456,7 @@ function renderProjects() {
     <button class="btn btn-outline-primary btn-sm" id="addProjectBtn" type="button">Add Project</button>`;
 }
 
+// Renders skill items from the shared library.
 function renderSkills() {
   ensureResumeShape(currentResume);
   const items = currentResume.resumeData.library.skills || [];
@@ -412,6 +470,7 @@ function renderSkills() {
     <button class="btn btn-outline-primary btn-sm" id="addSkillBtn" type="button">Add Skill</button>`;
 }
 
+// Renders certifications and awards together.
 function renderExtras() {
   ensureResumeShape(currentResume);
 
@@ -441,6 +500,7 @@ function renderExtras() {
   `;
 }
 
+// Chooses the correct section renderer and puts that HTML into the editor panel.
 function renderEditor() {
   const titles = {
     basics: 'Basics',
@@ -467,6 +527,7 @@ function renderEditor() {
   bindAddButtons();
 }
 
+// Connects Add buttons after each section is rendered.
 function bindAddButtons() {
   $('generateStatementBtn')?.addEventListener('click', generateProfessionalStatement);
 
@@ -519,11 +580,13 @@ function bindAddButtons() {
   });
 }
 
+// Creates a resume preview section only if it has content.
 function section(title, content) {
   if (!content || !String(content).trim()) return '';
   return `<div class="resume-section-title">${title}</div>${content}`;
 }
 
+// Renders the right-side live preview based on the currently selected items.
 function renderPreview() {
   normalizeResumeData();
 
@@ -575,6 +638,8 @@ function renderPreview() {
   `;
 }
 
+// Loads the resume list and then loads the selected resume.
+// This runs when the app starts and after creating/saving resumes.
 async function loadResumes(selectedId = null) {
   const resumes = await api.getResumes();
 
@@ -593,6 +658,7 @@ async function loadResumes(selectedId = null) {
   }
 }
 
+// Uses Gemini to generate the professional statement from the target role and selected facts.
 async function generateProfessionalStatement() {
   normalizeResumeData();
 
@@ -636,6 +702,8 @@ async function generateProfessionalStatement() {
   }
 }
 
+// Uses Gemini to select the best items for the target role.
+// The user still has to click Save Resume to persist those optimized choices.
 async function optimizeResume() {
   normalizeResumeData();
 
@@ -684,7 +752,9 @@ async function optimizeResume() {
   }
 }
 
+// Connects the permanent buttons and controls that exist in index.html.
 function bindGlobalEvents() {
+  // Left-side section navigation.
   $('sectionTabs').addEventListener('click', (event) => {
     const button = event.target.closest('[data-section]');
     if (!button) return;
@@ -701,6 +771,7 @@ function bindGlobalEvents() {
     renderEditor();
   });
 
+  // Resume dropdown selection.
   $('resumeSelect').addEventListener('change', async (event) => {
     currentResume = await api.getResume(event.target.value);
     ensureResumeShape(currentResume);
@@ -708,6 +779,7 @@ function bindGlobalEvents() {
     renderPreview();
   });
 
+  // Save the current resume to SQLite through the backend.
   $('saveResumeBtn').addEventListener('click', async () => {
     try {
       normalizeResumeData();
@@ -723,6 +795,7 @@ function bindGlobalEvents() {
     }
   });
 
+  // Create a new resume that shares the existing item library, but starts with nothing selected.
   $('newResumeBtn').addEventListener('click', async () => {
     try {
       normalizeResumeData();
@@ -753,12 +826,16 @@ function bindGlobalEvents() {
     }
   });
 
+  // Optimize with Gemini.
   $('optimizeResumeBtn').addEventListener('click', optimizeResume);
 
+  // Print the resume using the browser/Electron print dialog.
   $('printBtn').addEventListener('click', () => {
     window.print();
   });
 
+  // Frontend-only PDF saving uses the print dialog.
+  // The user chooses "Save as PDF" or "Microsoft Print to PDF" in that dialog.
   $('savePdfBtn')?.addEventListener('click', () => {
     showMessage(
       'To save as PDF, choose "Save as PDF" or "Microsoft Print to PDF" in the print dialog.',
@@ -771,6 +848,7 @@ function bindGlobalEvents() {
     }, 300);
   });
 
+  // Save the user's Gemini API key through the backend into local SQLite settings.
   $('saveSettingsBtn').addEventListener('click', async () => {
     try {
       const keyInput = $('geminiApiKey');
@@ -801,6 +879,8 @@ function bindGlobalEvents() {
   });
 }
 
+// App startup.
+// Once the DOM exists, bind the global controls and load saved resumes from SQLite.
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     bindGlobalEvents();
