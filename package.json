@@ -14,11 +14,10 @@
     "bootstrap-icons": "^1.11.3",
     "concurrently": "^9.1.2",
     "dotenv": "^16.4.7",
-    "electron": "^33.2.1",
+    "electron": "^41.5.0",
     "express": "^4.21.2",
-    "sqlite3": "^5.1.7",
-    "uuid": "^11.0.3",
+    "sqlite3": "^6.0.1",
+    "uuid": "^14.0.0",
     "wait-on": "^8.0.1"
-  },
-  "devDependencies": {}
+  }
 }
