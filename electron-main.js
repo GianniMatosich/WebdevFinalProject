@@ -9,7 +9,7 @@ function startServer() {
   serverProcess = spawn(process.execPath, [path.join(__dirname, 'server', 'server.js')], {
     cwd: __dirname,
     stdio: 'inherit',
-    env: { ...process.env, PORT: process.env.PORT || '3100' }
+    env: { ...process.env, PORT: process.env.PORT || '3101' }
   });
 }
 
@@ -26,7 +26,7 @@ function createWindow() {
     }
   });
 
-  win.loadURL(process.env.APP_URL || `http://localhost:${process.env.PORT || 3100}`);
+  win.loadURL(process.env.APP_URL || `http://localhost:${process.env.PORT || 3101}`);
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };

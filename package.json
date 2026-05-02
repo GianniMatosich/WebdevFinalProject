@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/server.js",
     "electron": "electron .",
-    "dev": "concurrently \"node server/server.js\" \"wait-on http://localhost:3100 && electron .\""
+    "dev": "concurrently \"node server/server.js\" \"wait-on http://localhost:3101 && electron .\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
